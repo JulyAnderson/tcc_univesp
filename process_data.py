@@ -1,4 +1,5 @@
 # %%
+
 import pandas as pd 
 
 dados = pd.read_csv('dados_coletados_PNCP_ate_pagina_74_normalize.csv')
@@ -85,3 +86,7 @@ colunas_redundantes_a_excluir = [
 #As colunas acima são reduntantes, pois todas apresentam uma coluna correspondente no formato int que representa o id da informação.
 #Excluir colunas do DataFrame
 df_reduzido = dados.drop(columns=colunas_redundantes_a_excluir)
+
+# %%
+df_reduzido
+# %%
