@@ -1,92 +1,182 @@
 # %%
-
 import pandas as pd 
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.preprocessing import StandardScaler
 
-dados = pd.read_csv('dados_coletados_PNCP_ate_pagina_74_normalize.csv')
+# %% Leitura dos dados
+dados = pd.read_csv('dados_coletados_PNCP_ate_pagina_74_normalize.csv', index_col='Unnamed: 0')
 
-#filtrando as variáveis com todos os valores nulos
-colunas_nulas = dados.columns[dados.isnull().all()]
-
+# %% Remover colunas com todos os valores nulos ou apenas um valor não nulo
+# Criando a máscara
+mascara = dados.isnull().sum() >= 2966
+# Filtrando apenas as colunas com valor True
+colunas_nulas = mascara[mascara].index.tolist()
 dados = dados.drop(columns=colunas_nulas)
 
-# Lista das colunas a serem convertidas para datetime
-colunas_data = ['dataAberturaProposta','dataEncerramentoProposta', 'dataInclusao', 'dataPublicacaoPncp', 'dataAtualizacao']
+#%% Remover colunas redundantes
+# A coluna 'modalidadeId' possui o valor fixo 8, indicando que todas as linhas correspondem à modalidade de dispensa de licitações, portanto, não é relevante para a análise.
+# As colunas 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', e 'orgaoEntidade.razaoSocial' são redundantes, pois já possuímos o 'modalidadeId' e 'situacaoCompraId' com a mesma informação em formato numérico.
+# Outras colunas, como 'informacaoComplementar', 'objetoCompra', 'linkSistemaOrigem', e detalhes sobre localização como 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla', entre outras, não são necessárias para a análise pretendida.
 
-# Converte as colunas especificadas para o tipo datetime
-for coluna in colunas_data:
-    dados[coluna] = pd.to_datetime(dados[coluna], errors='coerce')
-
-
-#excluindo colunas que apresentam 2966 valores perdidos,já que a base de dados apresenta 2967 valores
-# Listando as colunas que você deseja remover
-colunas_a_remover = [
-    'orgaoSubRogado.razaoSocial', 
-    'orgaoSubRogado.poderId', 
-    'orgaoSubRogado.esferaId', 
-    'unidadeSubRogada.ufNome', 
-    'unidadeSubRogada.nomeUnidade', 
-    'unidadeSubRogada.ufSigla', 
-    'unidadeSubRogada.municipioNome',
-    'orgaoSubRogado.cnpj', 
-    'unidadeSubRogada.codigoUnidade',
-    'unidadeSubRogada.codigoIbge'
+colunas_para_remover = [
+    'modalidadeId', 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', 
+    'orgaoEntidade.razaoSocial', 'informacaoComplementar', 'objetoCompra', 
+    'linkSistemaOrigem', 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla',
+    'amparoLegal.descricao', 'amparoLegal.nome', 'unidadeOrgao.municipioNome', 
+    'unidadeOrgao.nomeUnidade','tipoInstrumentoConvocatorioNome', 'modoDisputaNome', 
+    'orgaoEntidade.cnpj','numeroCompra','numeroControlePNCP'
 ]
 
 # Removendo as colunas do DataFrame
-dados = dados.drop(columns=colunas_a_remover)
+dados = dados.drop(columns=colunas_para_remover)
 
-#Considerando o grande número de outliers (389) optamos por preencher os dados a partir da mediana# Calcular a mediana da coluna 'valorTotalHomologado'
+#%% Analisando as datas
+# Converter colunas de data
+colunas_data = ['dataAberturaProposta', 'dataEncerramentoProposta', 'dataInclusao', 'dataPublicacaoPncp', 'dataAtualizacao']
+for coluna in colunas_data:
+    dados[coluna] = pd.to_datetime(dados[coluna], errors='coerce')
+
+# Calcular a diferença entre as datas
+dados['diff_abertura_encerramento'] = (dados['dataEncerramentoProposta'] - dados['dataAberturaProposta']).dt.days
+dados['diff_inclusao_atualizacao'] = (dados['dataAtualizacao'] - dados['dataInclusao']).dt.days
+# Converter datas em número de dias desde a data mínima
+min_date = dados[['dataAberturaProposta', 'dataEncerramentoProposta', 'dataInclusao', 'dataAtualizacao']].min().min()
+
+dados['days_from_min_abertura'] = (dados['dataAberturaProposta'] - min_date).dt.days
+dados['days_from_min_encerramento'] = (dados['dataEncerramentoProposta'] - min_date).dt.days
+dados['days_from_min_inclusao'] = (dados['dataInclusao'] - min_date).dt.days
+dados['days_from_min_atualizacao'] = (dados['dataAtualizacao'] - min_date).dt.days
+
+# Calcular a correlação entre essas colunas
+correlacao = dados[['days_from_min_abertura', 'days_from_min_encerramento', 'days_from_min_inclusao', 'days_from_min_atualizacao']].corr()
+
+# Comparar se os valores ausentes ocorrem nas mesmas linhas para ambas as colunas
+ausentes_mesmas_linhas = dados['dataAberturaProposta'].isnull() == dados['dataEncerramentoProposta'].isnull()
+
+# Verificar se todos os valores são True, o que indicaria que os dados ausentes ocorrem nas mesmas linhas
+mesmos_ausentes = ausentes_mesmas_linhas.all()
+
+# Exibir o resultado
+if mesmos_ausentes:
+    print("Os dados ausentes ocorrem nas mesmas linhas para as duas variáveis.")
+else:
+    print("Os dados ausentes não ocorrem nas mesmas linhas para as duas variáveis.")
+
+
+#exluindo uma das datas com maior correlação 0.999129 entre dataAberturaProposta e dataEncerramentoProposta  
+dados = dados.drop(columns = ['diff_abertura_encerramento',
+       'diff_inclusao_atualizacao', 'days_from_min_abertura',
+       'days_from_min_encerramento', 'days_from_min_inclusao',
+       'days_from_min_atualizacao', 'dataEncerramentoProposta'])
+
+
+
+# %% Observando a correlação
+# Seleciona apenas colunas numéricas
+dados_numericos = dados.select_dtypes(include=['float64', 'int64'])
+# Calcula a matriz de correlação
+matriz_correlacao = dados_numericos.corr()
+
+#considerando a alta correlação entre ValorTotalHomologado e ValotTotalEstimado, opta-se pela eliminação do valorTotalEstimado, evitando a redundância
+dados = dados.drop(columns='valorTotalEstimado')
+
+# %% Imputando valores faltantes em valorTotalHomologado
+# # Cálculo da mediana e tratamento de valores ausentes
+
+
+# Cálculo dos quartis e do IQR (Interquartile Range)
+q1 = dados['valorTotalHomologado'].quantile(0.25)
+q3 = dados['valorTotalHomologado'].quantile(0.75)
+iqr = q3 - q1
+
+# Definindo limites para outliers
+limite_inferior = q1 - 1.5 * iqr
+limite_superior = q3 + 1.5 * iqr
+
+# Filtrando os outliers
+outliers = dados[(dados['valorTotalHomologado'] < limite_inferior) | 
+                 (dados['valorTotalHomologado'] > limite_superior)]
+
+# Exibindo o número de outliers
+num_outliers = outliers.shape[0]
+print(f'Número de outliers em valorTotalHomologado: {num_outliers}')
+
 mediana_valorTotal = dados['valorTotalHomologado'].median()
-
-# Imputar os valores ausentes com a mediana
 dados['valorTotalHomologado'].fillna(mediana_valorTotal, inplace=True)
 
-# Colunas a serem excluídas
-colunas_a_excluir = [
-    'informacaoComplementar',
-    'linkSistemaOrigem',
-    'numeroCompra',
-    'numeroControlePNCP',
-    'modalidadeNome',
-    'modalidadeId',
-    'modoDisputaNome',
-    'usuarioNome',
-    'amparoLegal.nome',
-    'unidadeOrgao.ufSigla',
+
+# %% One-hot encoding para as colunas categóricas específicas
+colunas_one_hot = [
+    'modoDisputaId', 
+    'situacaoCompraId', 
+    'tipoInstrumentoConvocatorioCodigo', 
+    'amparoLegal.codigo', 
+    'orgaoEntidade.poderId', 
+    'orgaoEntidade.esferaId'
 ]
 
-# As colunas a serem excluídas foram selecionadas com base na sua relevância e na possibilidade de redundância:
-# 
-# - 'informacaoComplementar': Pode não fornecer dados críticos para a análise de processos de dispensa.
-# - 'linkSistemaOrigem': Não é necessário para a análise em si e não agrega valor à compreensão dos dados.
-# - 'numeroCompra': Redundante, pois o 'processo' já identifica unicamente cada compra.
-# - 'numeroControlePNCP': Não é essencial para a análise e não agrega valor significativo.
-# - 'modalidadeNome' e 'modoDisputaNome': Essas informações podem ser menos relevantes, visto que o foco é apenas nas dispensas.
-# - 'usuarioNome': A identidade do usuário não é relevante para a análise do processo em si.
-# - 'amparoLegal.nome': Pode ser considerado redundante se a descrição já fornecer a informação necessária sobre a base legal.
-# - 'unidadeOrgao.ufSigla': Redundante em relação a 'unidadeOrgao.ufNome', que já fornece a informação completa.
-# - 'unidadeOrgao.codigoUnidade': Não é crítico para a análise e pode ser dispensado.
-# As colunas que permanecem fornecem informações essenciais e relevantes para a análise dos processos de dispensa de licitação, garantindo que os dados sejam mais claros e focados.
+for coluna in colunas_one_hot:
+    # Criar dummies
+    dummies = pd.get_dummies(dados[coluna], prefix=coluna)
+    
+    # Garantir que todas as colunas necessárias existam
+    if coluna == 'modoDisputaId':
+        for i in [4, 5]:
+            col_name = f'{coluna}_{i}'
+            if col_name not in dummies.columns:
+                dummies[col_name] = 0
+    elif coluna == 'situacaoCompraId':
+        for i in [1, 2, 3]:
+            col_name = f'{coluna}_{i}'
+            if col_name not in dummies.columns:
+                dummies[col_name] = 0
+    elif coluna == 'tipoInstrumentoConvocatorioCodigo':
+        for i in [2, 3]:
+            col_name = f'{coluna}_{i}'
+            if col_name not in dummies.columns:
+                dummies[col_name] = 0
+    elif coluna == 'amparoLegal.codigo':
+        for i in [18, 19, 20, 21, 22, 24, 36, 37, 38, 39, 41, 45]:
+            col_name = f'{coluna}_{i}'
+            if col_name not in dummies.columns:
+                dummies[col_name] = 0
+    elif coluna == 'orgaoEntidade.poderId':
+        for valor in ['E', 'N', 'L', 'J']:
+            col_name = f'{coluna}_{valor}'
+            if col_name not in dummies.columns:
+                dummies[col_name] = 0
+    elif coluna == 'orgaoEntidade.esferaId':
+        for valor in ['F', 'M', 'E', 'N', 'D']:
+            col_name = f'{coluna}_{valor}'
+            if col_name not in dummies.columns:
+                dummies[col_name] = 0
 
-# Excluir colunas do DataFrame
-df_reduzido = dados.drop(columns=colunas_a_excluir)
+    # Adicionar as dummies ao dataframe
+    dados = pd.concat([dados, dummies], axis=1)
 
-colunas_redundantes_a_excluir = [
-    'tipoInstrumentoConvocatorioNome',
-        'situacaoCompraId',
-        'orgaoEntidade.cnpj',
-       'orgaoEntidade.poderId', 
-       'orgaoEntidade.esferaId', 
-       'amparoLegal.codigo', 
-       'unidadeOrgao.ufNome',
-     'unidadeOrgao.codigoUnidade',
-     'unidadeOrgao.codigoIbge'
-]
+#categoria é substituída pela frequência ou contagem de ocorrências dessa categoria no conjunto de dados.
+freq_encoding = dados['unidadeOrgao.codigoIbge'].value_counts()
+dados['unidadeOrgao.codigoIbge'] = dados['unidadeOrgao.codigoIbge'].map(freq_encoding)
+freq_encoding = dados['unidadeOrgao.codigoUnidade'].value_counts()
+dados['unidadeOrgao.codigoUnidade'] = dados['unidadeOrgao.codigoUnidade'].map(freq_encoding)
 
-#As colunas acima são reduntantes, pois todas apresentam uma coluna correspondente no formato int que representa o id da informação.
-#Excluir colunas do DataFrame
-df_reduzido = dados.drop(columns=colunas_redundantes_a_excluir)
 
-# %%
-df_reduzido
+    
+# Remover as colunas originais que foram transformadas
+dados = dados.drop(columns=colunas_one_hot)
+
+#%% Remover duplicatas
+dados = dados.drop_duplicates()
+
+# %% Selecionar apenas as colunas numéricas para normalização
+dados_numericos = dados.select_dtypes(include=['float64', 'int64']).columns
+
+# Instanciar o StandardScaler e aplicar a normalização
+scaler = StandardScaler()
+dados[dados_numericos] = scaler.fit_transform(dados[dados_numericos])
+
+# %% Salvar o DataFrame normalizado em um novo arquivo CSV
+dados.to_csv('dados_processados.csv', index=False)
+
 # %%

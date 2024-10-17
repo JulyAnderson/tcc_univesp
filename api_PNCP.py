@@ -2,9 +2,6 @@ import requests
 import pandas as pd
 from datetime import datetime, timedelta
 import time
-
-import requests
-import time
 import json
 
 BASE_URL = "https://pncp.gov.br/api/consulta/v1/"
