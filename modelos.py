@@ -18,12 +18,13 @@ def prepare_data(df, robust=False):
     Prepares data for analysis, including cleaning and normalization.
     :param robust: If True, uses RobustScaler for normalization.
     """
+    numeric_cols = df.select_dtypes(include=['int64', 'float64', 'bool']).columns #aumenta a quantidade de anomalias
     numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+
     df_numeric = df[numeric_cols].copy()
     
     # Handle missing values
     df_numeric = df_numeric.fillna(df_numeric.median())
-    
     # Normalize the data
     if robust:
         scaler = RobustScaler()
