@@ -196,10 +196,12 @@ def main(df):
     return results_dict, comparison
 
 
+
 if __name__ == "__main__":
     try:
         df_reduzido = pd.read_csv('dados_processados.csv')
         predictions, comparison = main(df_reduzido)
+
     except Exception as e:
         print(f"Error loading or processing data: {e}")
 

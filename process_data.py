@@ -6,14 +6,12 @@ from sklearn.preprocessing import StandardScaler
 
 # %% Leitura dos dados
 dados = pd.read_csv('dados_coletados_PNCP_ate_pagina_74_normalize.csv', index_col='Unnamed: 0')
-
 # %% Remover colunas com todos os valores nulos ou apenas um valor não nulo
 # Criando a máscara
 mascara = dados.isnull().sum() >= 2966
 # Filtrando apenas as colunas com valor True
 colunas_nulas = mascara[mascara].index.tolist()
 dados = dados.drop(columns=colunas_nulas)
-
 #%% Remover colunas redundantes
 # A coluna 'modalidadeId' possui o valor fixo 8, indicando que todas as linhas correspondem à modalidade de dispensa de licitações, portanto, não é relevante para a análise.
 # As colunas 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', e 'orgaoEntidade.razaoSocial' são redundantes, pois já possuímos o 'modalidadeId' e 'situacaoCompraId' com a mesma informação em formato numérico.
@@ -70,8 +68,6 @@ dados = dados.drop(columns = ['diff_abertura_encerramento',
        'days_from_min_encerramento', 'days_from_min_inclusao',
        'days_from_min_atualizacao', 'dataEncerramentoProposta'])
 
-
-
 # %% Observando a correlação
 # Seleciona apenas colunas numéricas
 dados_numericos = dados.select_dtypes(include=['float64', 'int64'])
@@ -80,6 +76,8 @@ matriz_correlacao = dados_numericos.corr()
 
 #considerando a alta correlação entre ValorTotalHomologado e ValotTotalEstimado, opta-se pela eliminação do valorTotalEstimado, evitando a redundância
 dados = dados.drop(columns='valorTotalEstimado')
+
+matriz_correlacao
 
 # %% Imputando valores faltantes em valorTotalHomologado
 # # Cálculo da mediana e tratamento de valores ausentes
@@ -177,6 +175,7 @@ scaler = StandardScaler()
 dados[dados_numericos] = scaler.fit_transform(dados[dados_numericos])
 
 # %% Salvar o DataFrame normalizado em um novo arquivo CSV
-dados.to_csv('dados_processados.csv', index=False)
+#dados.to_csv('dados_processados.csv', index=False)
 
 # %%
+dados
