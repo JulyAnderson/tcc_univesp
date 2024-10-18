@@ -1,181 +1,180 @@
-# %%
-import pandas as pd 
-import matplotlib.pyplot as plt
-import seaborn as sns
+import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from typing import List, Dict
+import logging
+from pathlib import Path
 
-# %% Leitura dos dados
-dados = pd.read_csv('dados_coletados_PNCP_ate_pagina_74_normalize.csv', index_col='Unnamed: 0')
-# %% Remover colunas com todos os valores nulos ou apenas um valor não nulo
-# Criando a máscara
-mascara = dados.isnull().sum() >= 2966
-# Filtrando apenas as colunas com valor True
-colunas_nulas = mascara[mascara].index.tolist()
-dados = dados.drop(columns=colunas_nulas)
-#%% Remover colunas redundantes
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+
+class DataPreprocessor:
+    def __init__(self, input_file: str):
+        """
+        Inicializa o preprocessador de dados.
+        
+        Args:
+            input_file (str): Caminho para o arquivo CSV de entrada
+        """
+        self.input_file = Path(input_file)
+        self.data = None
+        self.scaler = StandardScaler()
+        
+    def load_data(self) -> None:
+        """Carrega os dados do arquivo CSV."""
+        try:
+            self.data = pd.read_csv(self.input_file, index_col='Unnamed: 0')
+            logging.info(f"Dados carregados com sucesso. Shape: {self.data.shape}")
+        except Exception as e:
+            logging.error(f"Erro ao carregar dados: {e}")
+            raise
+            
+    def remove_duplicates(self) -> None:
+        """Remove linhas duplicadas."""
+        initial_rows = len(self.data)
+        self.data = self.data.drop_duplicates()
+        removed_rows = initial_rows - len(self.data)
+        logging.info(f"Removidas {removed_rows} linhas duplicadas")
+        
+    def remove_null_columns(self) -> None:
+        """Remove colunas com todos os valores nulos ou apenas um valor não nulo."""
+        null_cols = self.data.columns[self.data.isnull().all()].tolist()
+        single_value_cols = self.data.columns[self.data.notnull().sum() == 1].tolist()
+        cols_to_remove = null_cols + single_value_cols
+        
+        self.data = self.data.drop(columns=cols_to_remove)
+        logging.info(f"Removidas {len(cols_to_remove)} colunas com valores nulos/únicos")
+        
+    def remove_redundant_columns(self, redundant_cols: List[str]) -> None:
+        """
+        Remove colunas redundantes especificadas.
+        
+        Args:
+            redundant_cols (List[str]): Lista de colunas a serem removidas
+        """
+        self.data = self.data.drop(columns=redundant_cols)
+        logging.info(f"Removidas {len(redundant_cols)} colunas redundantes")
+        
+    def process_dates(self) -> None:
+        """Processa e transforma colunas de data."""
+        date_columns = [
+            'dataAberturaProposta', 'dataEncerramentoProposta',
+            'dataInclusao', 'dataPublicacaoPncp', 'dataAtualizacao'
+        ]
+        
+        for col in date_columns:
+            if col in self.data.columns:
+                self.data[col] = pd.to_datetime(self.data[col], errors='coerce')
+        
+        # Removendo colunas de data redundantes após análise de correlação
+        self.data = self.data.drop(columns=['dataEncerramentoProposta'])
+        logging.info("Processamento de datas concluído")
+        
+    def handle_missing_values(self) -> None:
+        """Trata valores faltantes usando a mediana e remove outliers."""
+        # Tratamento para valorTotalHomologado
+        q1 = self.data['valorTotalHomologado'].quantile(0.25)
+        q3 = self.data['valorTotalHomologado'].quantile(0.75)
+        iqr = q3 - q1
+        
+        lower_bound = q1 - 1.5 * iqr
+        upper_bound = q3 + 1.5 * iqr
+        
+        outliers_mask = (self.data['valorTotalHomologado'] < lower_bound) | \
+                       (self.data['valorTotalHomologado'] > upper_bound)
+        
+        n_outliers = outliers_mask.sum()
+        logging.info(f"Identificados {n_outliers} outliers em valorTotalHomologado")
+        
+        median_value = self.data['valorTotalHomologado'].median()
+        self.data['valorTotalHomologado'].fillna(median_value, inplace=True)
+        
+    def encode_categorical_variables(self, encoding_cols: Dict[str, List]) -> None:
+        """
+        Realiza one-hot encoding para variáveis categóricas.
+        
+        Args:
+            encoding_cols (Dict[str, List]): Dicionário com colunas e seus valores possíveis
+        """
+        for col, possible_values in encoding_cols.items():
+            dummies = pd.get_dummies(self.data[col], prefix=col)
+            
+            # Garantir que todas as categorias esperadas existam
+            for value in possible_values:
+                col_name = f"{col}_{value}"
+                if col_name not in dummies.columns:
+                    dummies[col_name] = 0
+                    
+            self.data = pd.concat([self.data, dummies], axis=1)
+            self.data = self.data.drop(columns=[col])
+            
+        logging.info("Encoding de variáveis categóricas concluído")
+        
+    def normalize_numerical_features(self) -> None:
+        """Normaliza features numéricas usando StandardScaler."""
+        numerical_cols = self.data.select_dtypes(include=['float64', 'int64']).columns
+        self.data[numerical_cols] = self.scaler.fit_transform(self.data[numerical_cols])
+        logging.info("Normalização de features numéricas concluída")
+        
+    def save_processed_data(self, output_file: str) -> None:
+        """
+        Salva os dados processados em um arquivo CSV.
+        
+        Args:
+            output_file (str): Caminho para o arquivo de saída
+        """
+        self.data.to_csv(output_file, index=False)
+        logging.info(f"Dados processados salvos em {output_file}")
+
+def main():
+    # Definir configurações
+    input_file = 'dados_coletados_PNCP_ate_pagina_74_normalize.csv'
+    output_file = 'dados_processados.csv'
+    
+    # Colunas redundantes a serem removidas
+    redundant_cols = [
+        'modalidadeId', 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome',
+        'orgaoEntidade.razaoSocial', 'informacaoComplementar', 'objetoCompra',
+        'linkSistemaOrigem', 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla',
+        'amparoLegal.descricao', 'amparoLegal.nome', 'unidadeOrgao.municipioNome',
+        'unidadeOrgao.nomeUnidade', 'tipoInstrumentoConvocatorioNome', 'modoDisputaNome',
+        'orgaoEntidade.cnpj', 'numeroCompra', 'numeroControlePNCP'
+    ]
+    
+    # Configuração para encoding categórico
+    encoding_config = {
+        'modoDisputaId': [4, 5],
+        'situacaoCompraId': [1, 2, 3],
+        'tipoInstrumentoConvocatorioCodigo': [2, 3],
+        'amparoLegal.codigo': [18, 19, 20, 21, 22, 24, 36, 37, 38, 39, 41, 45],
+        'orgaoEntidade.poderId': ['E', 'N', 'L', 'J'],
+        'orgaoEntidade.esferaId': ['F', 'M', 'E', 'N', 'D']
+    }
+    
+    try:
+        # Instanciar e executar o preprocessador
+        preprocessor = DataPreprocessor(input_file)
+        preprocessor.load_data()
+        preprocessor.remove_duplicates()
+        preprocessor.remove_null_columns()
+        preprocessor.process_dates()
+        preprocessor.remove_redundant_columns(redundant_cols)
+        preprocessor.handle_missing_values()
+        preprocessor.encode_categorical_variables(encoding_config)
+        preprocessor.normalize_numerical_features()
+        preprocessor.save_processed_data(output_file)
+        
+        logging.info("Preprocessamento concluído com sucesso!")
+        
+    except Exception as e:
+        logging.error(f"Erro durante o preprocessamento: {e}")
+        raise
+
+if __name__ == "__main__":
+    main()
+
 # A coluna 'modalidadeId' possui o valor fixo 8, indicando que todas as linhas correspondem à modalidade de dispensa de licitações, portanto, não é relevante para a análise.
 # As colunas 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', e 'orgaoEntidade.razaoSocial' são redundantes, pois já possuímos o 'modalidadeId' e 'situacaoCompraId' com a mesma informação em formato numérico.
 # Outras colunas, como 'informacaoComplementar', 'objetoCompra', 'linkSistemaOrigem', e detalhes sobre localização como 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla', entre outras, não são necessárias para a análise pretendida.
-
-colunas_para_remover = [
-    'modalidadeId', 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', 
-    'orgaoEntidade.razaoSocial', 'informacaoComplementar', 'objetoCompra', 
-    'linkSistemaOrigem', 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla',
-    'amparoLegal.descricao', 'amparoLegal.nome', 'unidadeOrgao.municipioNome', 
-    'unidadeOrgao.nomeUnidade','tipoInstrumentoConvocatorioNome', 'modoDisputaNome', 
-    'orgaoEntidade.cnpj','numeroCompra','numeroControlePNCP'
-]
-
-# Removendo as colunas do DataFrame
-dados = dados.drop(columns=colunas_para_remover)
-
-#%% Analisando as datas
-# Converter colunas de data
-colunas_data = ['dataAberturaProposta', 'dataEncerramentoProposta', 'dataInclusao', 'dataPublicacaoPncp', 'dataAtualizacao']
-for coluna in colunas_data:
-    dados[coluna] = pd.to_datetime(dados[coluna], errors='coerce')
-
-# Calcular a diferença entre as datas
-dados['diff_abertura_encerramento'] = (dados['dataEncerramentoProposta'] - dados['dataAberturaProposta']).dt.days
-dados['diff_inclusao_atualizacao'] = (dados['dataAtualizacao'] - dados['dataInclusao']).dt.days
-# Converter datas em número de dias desde a data mínima
-min_date = dados[['dataAberturaProposta', 'dataEncerramentoProposta', 'dataInclusao', 'dataAtualizacao']].min().min()
-
-dados['days_from_min_abertura'] = (dados['dataAberturaProposta'] - min_date).dt.days
-dados['days_from_min_encerramento'] = (dados['dataEncerramentoProposta'] - min_date).dt.days
-dados['days_from_min_inclusao'] = (dados['dataInclusao'] - min_date).dt.days
-dados['days_from_min_atualizacao'] = (dados['dataAtualizacao'] - min_date).dt.days
-
-# Calcular a correlação entre essas colunas
-correlacao = dados[['days_from_min_abertura', 'days_from_min_encerramento', 'days_from_min_inclusao', 'days_from_min_atualizacao']].corr()
-
-# Comparar se os valores ausentes ocorrem nas mesmas linhas para ambas as colunas
-ausentes_mesmas_linhas = dados['dataAberturaProposta'].isnull() == dados['dataEncerramentoProposta'].isnull()
-
-# Verificar se todos os valores são True, o que indicaria que os dados ausentes ocorrem nas mesmas linhas
-mesmos_ausentes = ausentes_mesmas_linhas.all()
-
-# Exibir o resultado
-if mesmos_ausentes:
-    print("Os dados ausentes ocorrem nas mesmas linhas para as duas variáveis.")
-else:
-    print("Os dados ausentes não ocorrem nas mesmas linhas para as duas variáveis.")
-
-
-#exluindo uma das datas com maior correlação 0.999129 entre dataAberturaProposta e dataEncerramentoProposta  
-dados = dados.drop(columns = ['diff_abertura_encerramento',
-       'diff_inclusao_atualizacao', 'days_from_min_abertura',
-       'days_from_min_encerramento', 'days_from_min_inclusao',
-       'days_from_min_atualizacao', 'dataEncerramentoProposta'])
-
-# %% Observando a correlação
-# Seleciona apenas colunas numéricas
-dados_numericos = dados.select_dtypes(include=['float64', 'int64'])
-# Calcula a matriz de correlação
-matriz_correlacao = dados_numericos.corr()
-
-#considerando a alta correlação entre ValorTotalHomologado e ValotTotalEstimado, opta-se pela eliminação do valorTotalEstimado, evitando a redundância
-dados = dados.drop(columns='valorTotalEstimado')
-
-matriz_correlacao
-
-# %% Imputando valores faltantes em valorTotalHomologado
-# # Cálculo da mediana e tratamento de valores ausentes
-
-
-# Cálculo dos quartis e do IQR (Interquartile Range)
-q1 = dados['valorTotalHomologado'].quantile(0.25)
-q3 = dados['valorTotalHomologado'].quantile(0.75)
-iqr = q3 - q1
-
-# Definindo limites para outliers
-limite_inferior = q1 - 1.5 * iqr
-limite_superior = q3 + 1.5 * iqr
-
-# Filtrando os outliers
-outliers = dados[(dados['valorTotalHomologado'] < limite_inferior) | 
-                 (dados['valorTotalHomologado'] > limite_superior)]
-
-# Exibindo o número de outliers
-num_outliers = outliers.shape[0]
-print(f'Número de outliers em valorTotalHomologado: {num_outliers}')
-
-mediana_valorTotal = dados['valorTotalHomologado'].median()
-dados['valorTotalHomologado'].fillna(mediana_valorTotal, inplace=True)
-
-
-# %% One-hot encoding para as colunas categóricas específicas
-colunas_one_hot = [
-    'modoDisputaId', 
-    'situacaoCompraId', 
-    'tipoInstrumentoConvocatorioCodigo', 
-    'amparoLegal.codigo', 
-    'orgaoEntidade.poderId', 
-    'orgaoEntidade.esferaId'
-]
-
-for coluna in colunas_one_hot:
-    # Criar dummies
-    dummies = pd.get_dummies(dados[coluna], prefix=coluna)
-    
-    # Garantir que todas as colunas necessárias existam
-    if coluna == 'modoDisputaId':
-        for i in [4, 5]:
-            col_name = f'{coluna}_{i}'
-            if col_name not in dummies.columns:
-                dummies[col_name] = 0
-    elif coluna == 'situacaoCompraId':
-        for i in [1, 2, 3]:
-            col_name = f'{coluna}_{i}'
-            if col_name not in dummies.columns:
-                dummies[col_name] = 0
-    elif coluna == 'tipoInstrumentoConvocatorioCodigo':
-        for i in [2, 3]:
-            col_name = f'{coluna}_{i}'
-            if col_name not in dummies.columns:
-                dummies[col_name] = 0
-    elif coluna == 'amparoLegal.codigo':
-        for i in [18, 19, 20, 21, 22, 24, 36, 37, 38, 39, 41, 45]:
-            col_name = f'{coluna}_{i}'
-            if col_name not in dummies.columns:
-                dummies[col_name] = 0
-    elif coluna == 'orgaoEntidade.poderId':
-        for valor in ['E', 'N', 'L', 'J']:
-            col_name = f'{coluna}_{valor}'
-            if col_name not in dummies.columns:
-                dummies[col_name] = 0
-    elif coluna == 'orgaoEntidade.esferaId':
-        for valor in ['F', 'M', 'E', 'N', 'D']:
-            col_name = f'{coluna}_{valor}'
-            if col_name not in dummies.columns:
-                dummies[col_name] = 0
-
-    # Adicionar as dummies ao dataframe
-    dados = pd.concat([dados, dummies], axis=1)
-
-#categoria é substituída pela frequência ou contagem de ocorrências dessa categoria no conjunto de dados.
-freq_encoding = dados['unidadeOrgao.codigoIbge'].value_counts()
-dados['unidadeOrgao.codigoIbge'] = dados['unidadeOrgao.codigoIbge'].map(freq_encoding)
-freq_encoding = dados['unidadeOrgao.codigoUnidade'].value_counts()
-dados['unidadeOrgao.codigoUnidade'] = dados['unidadeOrgao.codigoUnidade'].map(freq_encoding)
-
-
-    
-# Remover as colunas originais que foram transformadas
-dados = dados.drop(columns=colunas_one_hot)
-
-#%% Remover duplicatas
-dados = dados.drop_duplicates()
-
-# %% Selecionar apenas as colunas numéricas para normalização
-dados_numericos = dados.select_dtypes(include=['float64', 'int64']).columns
-
-# Instanciar o StandardScaler e aplicar a normalização
-scaler = StandardScaler()
-dados[dados_numericos] = scaler.fit_transform(dados[dados_numericos])
-
-# %% Salvar o DataFrame normalizado em um novo arquivo CSV
-#dados.to_csv('dados_processados.csv', index=False)
-
-# %%
-dados
