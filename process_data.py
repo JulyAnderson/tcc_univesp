@@ -130,8 +130,8 @@ class DataPreprocessor:
 
 def main():
     # Definir configurações
-    input_file = 'dados_coletados_PNCP_ate_pagina_74_normalize.csv'
-    output_file = 'dados_processados.csv'
+    input_file = 'dados/brutos/dados_coletados_PNCP_ate_pagina_74_normalize.csv'
+    output_file = 'dados/processados/dados_processados.csv'
     
     # Colunas redundantes a serem removidas
     redundant_cols = [
@@ -175,6 +175,8 @@ def main():
 if __name__ == "__main__":
     main()
 
-# A coluna 'modalidadeId' possui o valor fixo 8, indicando que todas as linhas correspondem à modalidade de dispensa de licitações, portanto, não é relevante para a análise.
-# As colunas 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', e 'orgaoEntidade.razaoSocial' são redundantes, pois já possuímos o 'modalidadeId' e 'situacaoCompraId' com a mesma informação em formato numérico.
-# Outras colunas, como 'informacaoComplementar', 'objetoCompra', 'linkSistemaOrigem', e detalhes sobre localização como 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla', entre outras, não são necessárias para a análise pretendida.
+#A coluna 'modalidadeId' possui o valor fixo 8, indicando que todas as linhas correspondem à modalidade de dispensa de licitações, portanto, não é relevante para a análise.
+#As colunas 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', e 'orgaoEntidade.razaoSocial' são redundantes, pois já possuímos o 'modalidadeId' e 'situacaoCompraId' com
+#a mesma informação em formato numérico.
+#Outras colunas, como 'informacaoComplementar', 'objetoCompra', 'linkSistemaOrigem', e detalhes sobre localização como 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla', entre outras,
+#não são necessárias para a análise pretendida.

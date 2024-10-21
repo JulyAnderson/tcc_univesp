@@ -1,3 +1,4 @@
+#%%
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
@@ -7,8 +8,9 @@ from tensorflow.keras.layers import Input, Dense
 from tensorflow.keras.models import Model
 from tensorflow.keras.callbacks import EarlyStopping
 import matplotlib.pyplot as plt
-from sklearn.metrics import silhouette_score
+from sklearn.metrics import silhouette_score,silhouette_samples
 import seaborn as sns
+
 
 class AnomalyDetectionEnsemble:
     def __init__(self, contamination=0.1):
@@ -19,20 +21,16 @@ class AnomalyDetectionEnsemble:
         self.reconstruction_threshold = None
         
     def create_autoencoder(self, input_dim):
-        # Definindo a arquitetura do autoencoder
         input_layer = Input(shape=(input_dim,))
         
-        # Encoder
         encoded = Dense(int(input_dim * 0.75), activation='relu')(input_layer)
         encoded = Dense(int(input_dim * 0.5), activation='relu')(encoded)
         encoded = Dense(int(input_dim * 0.33), activation='relu')(encoded)
         
-        # Decoder
         decoded = Dense(int(input_dim * 0.5), activation='relu')(encoded)
         decoded = Dense(int(input_dim * 0.75), activation='relu')(decoded)
         decoded = Dense(input_dim, activation='sigmoid')(decoded)
         
-        # Criando o modelo
         self.autoencoder = Model(input_layer, decoded)
         self.autoencoder.compile(optimizer='adam', loss='mse')
         
@@ -63,20 +61,28 @@ class AnomalyDetectionEnsemble:
         
         # Otimizando parâmetros do DBSCAN
         print("\nOtimizando DBSCAN...")
-        best_score = -1
-        best_eps = None
+        best_score = -np.inf
+        best_eps = 0.5  # Valor padrão inicial
         
-        for eps in np.linspace(0.1, 1.0, 10):
+        eps_range = np.linspace(0.1, 1.0, 10)
+        for eps in eps_range:
             dbscan = DBSCAN(eps=eps, min_samples=5)
             labels = dbscan.fit_predict(X_scaled)
             
-            # Ignorando pontos de ruído para o cálculo do silhouette score
-            if len(np.unique(labels)) > 1 and -1 not in labels:
-                score = silhouette_score(X_scaled, labels)
-                if score > best_score:
-                    best_score = score
-                    best_eps = eps
+            # Verificar se há pelo menos dois clusters (excluindo ruído)
+            valid_labels = labels[labels != -1]
+            if len(np.unique(valid_labels)) >= 2:
+                try:
+                    score = silhouette_score(X_scaled[labels != -1], valid_labels)
+                    if score > best_score:
+                        best_score = score
+                        best_eps = eps
+                except:
+                    continue
         
+        print(f"Melhor eps encontrado: {best_eps:.3f}")
+        
+        # Treinando DBSCAN com o melhor eps encontrado
         self.dbscan = DBSCAN(eps=best_eps, min_samples=5)
         self.dbscan.fit(X_scaled)
         
@@ -128,3 +134,101 @@ class AnomalyDetectionEnsemble:
         
         plt.tight_layout()
         plt.show()
+
+#%%
+
+def main():
+    # 1. Carregando os dados
+    print("Carregando dados...")
+    X = load_data('dados_processados.csv')
+    print(f"Shape dos dados: {X.shape}")
+    print(f"Colunas disponíveis: {X.columns.tolist()}")
+    
+    # 2. Criando e treinando o detector
+    print("\nInicializando detector de anomalias...")
+    detector = AnomalyDetectionEnsemble(contamination=0.1)  # 10% dos dados serão considerados anomalias
+    
+    # 3. Treinando o modelo
+    print("\nIniciando treinamento...")
+    detector.fit(X)
+    
+    # 4. Fazendo predições
+    print("\nRealizando predições...")
+    predictions, reconstruction_errors, dbscan_predictions = detector.predict(X)
+    
+    # 5. Adicionando resultados ao DataFrame original
+    results_df = X.copy()
+    results_df['anomalia'] = predictions
+    results_df['erro_reconstrucao'] = reconstruction_errors
+    results_df['anomalia_dbscan'] = dbscan_predictions
+    
+    # 6. Salvando resultados
+    print("\nSalvando resultados...")
+    results_df.to_csv('resultados_anomalias.csv', index=False)
+    
+    # 7. Exibindo algumas estatísticas
+    print("\nEstatísticas das anomalias detectadas:")
+    print(f"Total de amostras: {len(predictions)}")
+    print(f"Número de anomalias detectadas: {sum(predictions)}")
+    print(f"Percentual de anomalias: {(sum(predictions)/len(predictions))*100:.2f}%")
+    
+    # 8. Plotando os resultados
+    print("\nGerando visualizações...")
+    detector.plot_results(X, predictions, reconstruction_errors, dbscan_predictions)
+
+if __name__ == "__main__":
+    main()
+
+# %%
+import numpy as np
+from sklearn.metrics import silhouette_score, silhouette_samples
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+def calculate_silhouette(X, labels):
+    """
+    Calcula e visualiza o Silhouette Score para um conjunto de dados clusterizado
+    
+    Parâmetros:
+    X : array-like de shape (n_samples, n_features)
+        Dados de entrada
+    labels : array-like de shape (n_samples,)
+        Rótulos dos clusters atribuídos pelo algoritmo
+    """
+    # Remove pontos classificados como ruído (-1)
+    mask = labels != -1
+    X_valid = X[mask]
+    labels_valid = labels[mask]
+    
+    # Calcula o score geral
+    if len(np.unique(labels_valid)) > 1:
+        sil_score = silhouette_score(X_valid, labels_valid)
+        
+        # Calcula os scores individuais
+        sample_silhouette_values = silhouette_samples(X_valid, labels_valid)
+        
+        # Visualização
+        plt.figure(figsize=(10, 6))
+        
+        # Plot do silhouette score para cada amostra
+        plt.plot(sample_silhouette_values)
+        plt.axhline(y=sil_score, color="red", linestyle="--", 
+                   label=f'Média: {sil_score:.3f}')
+        
+        plt.title('Silhouette Score por Amostra')
+        plt.xlabel('Amostras')
+        plt.ylabel('Silhouette Score')
+        plt.legend()
+        plt.show()
+        
+        return sil_score
+    else:
+        print("Erro: É necessário ter pelo menos 2 clusters para calcular o Silhouette Score")
+        return None
+    
+# Exemplo de uso
+X_scaled = scaler.transform(X)  # seus dados escalados
+labels = detector.dbscan.labels_  # labels do DBSCAN
+
+sil_score = calculate_silhouette(X_scaled, labels)
+print(f"Silhouette Score Global: {sil_score}")
