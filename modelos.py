@@ -24,11 +24,10 @@ logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
     handlers=[
-        logging.FileHandler('anomaly_detection.log'),
+        logging.FileHandler('logs/anomaly_detection.log'),
         logging.StreamHandler()
     ]
 )
-
 @dataclass
 class ModelConfig:
     """Configurações para os modelos de detecção de anomalias."""
@@ -344,7 +343,7 @@ class AnomalyDetector:
         )
         
         plt.tight_layout()
-        viz_path = f'anomaly_detection_results_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+        viz_path = f'images/anomaly_detection_results_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
         plt.savefig(viz_path, dpi=300, bbox_inches='tight')
         plt.close()
         
@@ -412,7 +411,7 @@ class AnomalyDetector:
             plt.grid(True, alpha=0.3)
             
             # Salvar visualização
-            dist_path = f'distribution_{col}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+            dist_path = f'images/distribution_{col}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
             plt.savefig(dist_path, dpi=300, bbox_inches='tight')
             plt.close()
             
@@ -443,7 +442,7 @@ class AnomalyDetector:
             plt.grid(True, alpha=0.3)
             
             # Salvar visualização
-            box_path = f'boxplot_{col}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
+            box_path = f'images/boxplot_{col}_{datetime.now().strftime("%Y%m%d_%H%M%S")}.png'
             plt.savefig(box_path, dpi=300, bbox_inches='tight')
             plt.close()
             
@@ -506,4 +505,4 @@ def main(input_file: str) -> None:
         raise
 
 if __name__ == "__main__":
-    main('dados_processados.csv')
+    main('dados/processados/dados_processados.csv')

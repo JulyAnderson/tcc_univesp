@@ -1,0 +1,28 @@
+2024-10-21 20:31:20,832 - ERROR - Erro durante a análise: [Errno 2] No such file or directory: 'dados/processados/dados_processados.csv'
+2024-10-21 20:31:22,100 - ERROR - Erro durante a análise: [Errno 2] No such file or directory: 'dados/processados/dados_processados.csv'
+2024-10-21 20:31:55,672 - INFO - Dados carregados com sucesso: (2188, 40)
+2024-10-21 20:31:55,677 - INFO - Iniciando treinamento e validação dos modelos...
+2024-10-21 20:31:55,703 - INFO - Treinando modelo: IsolationForest
+2024-10-21 20:31:59,488 - INFO - Treinando modelo: DBSCAN
+2024-10-21 20:32:01,045 - INFO - Treinando modelo: LOF
+2024-10-21 20:32:02,750 - INFO - Treinando modelo: KMeans
+2024-10-21 20:32:05,633 - INFO - Melhor modelo selecionado: DBSCAN
+2024-10-21 20:32:08,032 - INFO - Visualização salva em images/anomaly_detection_results_20241021_203206.png
+2024-10-21 20:32:08,127 - INFO - Estatísticas salvas em statistics_20241021_203208.txt
+2024-10-21 20:32:09,109 - INFO - Distribuição de valorTotalHomologado salva em images/distribution_valorTotalHomologado_20241021_203208.png
+2024-10-21 20:32:10,177 - INFO - Distribuição de anoCompra salva em images/distribution_anoCompra_20241021_203209.png
+2024-10-21 20:32:11,120 - INFO - Distribuição de sequencialCompra salva em images/distribution_sequencialCompra_20241021_203210.png
+2024-10-21 20:32:12,098 - INFO - Distribuição de valorTotalEstimado salva em images/distribution_valorTotalEstimado_20241021_203211.png
+2024-10-21 20:32:13,767 - INFO - Distribuição de unidadeOrgao.codigoIbge salva em images/distribution_unidadeOrgao.codigoIbge_20241021_203212.png
+2024-10-21 20:32:14,939 - INFO - Boxplot de valorTotalHomologado salvo em images/boxplot_valorTotalHomologado_20241021_203213.png
+2024-10-21 20:32:15,857 - INFO - Boxplot de anoCompra salvo em images/boxplot_anoCompra_20241021_203214.png
+2024-10-21 20:32:16,680 - INFO - Boxplot de sequencialCompra salvo em images/boxplot_sequencialCompra_20241021_203215.png
+2024-10-21 20:32:17,548 - INFO - Boxplot de valorTotalEstimado salvo em images/boxplot_valorTotalEstimado_20241021_203216.png
+2024-10-21 20:32:18,239 - INFO - Boxplot de unidadeOrgao.codigoIbge salvo em images/boxplot_unidadeOrgao.codigoIbge_20241021_203217.png
+2024-10-21 20:32:18,239 - INFO - Modelo e configuração salvos em models
+2024-10-21 20:32:18,282 - INFO - 
+        Análise concluída com sucesso!
+        Melhor modelo: DBSCAN
+        Resultados dos modelos salvos em: model_comparison_results_20241021_203218.csv
+        Anomalias detectadas salvas em: anomalias_detectadas_20241021_203218.csv
+        
