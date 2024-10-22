@@ -1,8 +1,9 @@
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, RobustScaler
 from typing import List, Dict
 import logging
 from pathlib import Path
+
 
 # Configurar logging
 logging.basicConfig(
@@ -11,16 +12,16 @@ logging.basicConfig(
 )
 
 class DataPreprocessor:
-    def __init__(self, input_file: str):
+    def __init__(self, input_file: str, robust:bool = False):
         """
         Inicializa o preprocessador de dados.
         
         Args:
             input_file (str): Caminho para o arquivo CSV de entrada
         """
-        self.input_file = Path(input_file)
+        self.input_file = Path(input_file) if input_file else None
         self.data = None
-        self.scaler = StandardScaler()
+        self.scaler = StandardScaler() if not robust else RobustScaler()
         
     def load_data(self) -> None:
         """Carrega os dados do arquivo CSV."""
@@ -125,34 +126,23 @@ class DataPreprocessor:
         Args:
             output_file (str): Caminho para o arquivo de saída
         """
-        self.data.to_csv(output_file, index=False)
+        self.data.to_pickle(output_file)
         logging.info(f"Dados processados salvos em {output_file}")
 
-def main():
-    # Definir configurações
-    input_file = 'dados/brutos/dados_coletados_PNCP_ate_pagina_74_normalize.csv'
-    output_file = 'dados/processados/dados_processados.csv'
+    def return_df(self) -> pd.DataFrame:
+        """Retorna o DataFrame processado."""
+        return self.data
+
+def preprocess_data(input_file: str, output_file: str, redundant_cols: List[str], encoding_config: Dict[str, List]):
+    """
+    Função para centralizar o processo de carregamento, limpeza e salvamento de dados.
     
-    # Colunas redundantes a serem removidas
-    redundant_cols = [
-        'modalidadeId', 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome',
-        'orgaoEntidade.razaoSocial', 'informacaoComplementar', 'objetoCompra',
-        'linkSistemaOrigem', 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla',
-        'amparoLegal.descricao', 'amparoLegal.nome', 'unidadeOrgao.municipioNome',
-        'unidadeOrgao.nomeUnidade', 'tipoInstrumentoConvocatorioNome', 'modoDisputaNome',
-        'orgaoEntidade.cnpj', 'numeroCompra', 'numeroControlePNCP'
-    ]
-    
-    # Configuração para encoding categórico
-    encoding_config = {
-        'modoDisputaId': [4, 5],
-        'situacaoCompraId': [1, 2, 3],
-        'tipoInstrumentoConvocatorioCodigo': [2, 3],
-        'amparoLegal.codigo': [18, 19, 20, 21, 22, 24, 36, 37, 38, 39, 41, 45],
-        'orgaoEntidade.poderId': ['E', 'N', 'L', 'J'],
-        'orgaoEntidade.esferaId': ['F', 'M', 'E', 'N', 'D']
-    }
-    
+    Args:
+        input_file (str): Caminho do arquivo de entrada CSV.
+        output_file (str): Caminho do arquivo CSV de saída.
+        redundant_cols (List[str]): Lista de colunas redundantes a serem removidas.
+        encoding_config (Dict[str, List]): Configuração para o encoding de variáveis categóricas.
+    """
     try:
         # Instanciar e executar o preprocessador
         preprocessor = DataPreprocessor(input_file)
@@ -168,12 +158,52 @@ def main():
         
         logging.info("Preprocessamento concluído com sucesso!")
         
+        return preprocessor.return_df()
+        
     except Exception as e:
         logging.error(f"Erro durante o preprocessamento: {e}")
         raise
 
+def main():
+    # Defina os parâmetros necessários
+    input_file = 'dados/brutos/dados_coletados_PNCP_ate_pagina_74_normalize.csv'
+    output_file = 'dados/processados/dados_processados.pkl'
+
+     # Colunas redundantes a serem removidas
+    redundant_cols = [
+        'modalidadeId', 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome',
+        'orgaoEntidade.razaoSocial', 'informacaoComplementar', 'objetoCompra',
+        'linkSistemaOrigem', 'unidadeOrgao.ufNome', 'unidadeOrgao.ufSigla',
+        'amparoLegal.descricao', 'amparoLegal.nome', 'unidadeOrgao.municipioNome',
+        'unidadeOrgao.nomeUnidade', 'tipoInstrumentoConvocatorioNome', 'modoDisputaNome',
+        'orgaoEntidade.cnpj', 'numeroCompra', 'numeroControlePNCP', "processo",
+        "unidadeOrgao.codigoUnidade"
+    ]
+    
+    # Configuração para encoding categórico
+    encoding_config = {
+        'modoDisputaId': [4, 5],
+        'situacaoCompraId': [1, 2, 3],
+        'tipoInstrumentoConvocatorioCodigo': [2, 3],
+        'amparoLegal.codigo': [18, 19, 20, 21, 22, 24, 36, 37, 38, 39, 41, 45],
+        'orgaoEntidade.poderId': ['E', 'N', 'L', 'J'],
+        'orgaoEntidade.esferaId': ['F', 'M', 'E', 'N', 'D']
+    }
+
+    # Chame a função de preprocessamento
+    try:
+        preprocessed_df = preprocess_data(input_file, output_file, redundant_cols, encoding_config)
+
+        # Exiba as primeiras linhas do DataFrame processado
+        print(preprocessed_df.head())
+        
+    except Exception as e:
+        logging.error(f"Erro ao executar o preprocessamento: {e}")
+
 if __name__ == "__main__":
     main()
+
+
 
 #A coluna 'modalidadeId' possui o valor fixo 8, indicando que todas as linhas correspondem à modalidade de dispensa de licitações, portanto, não é relevante para a análise.
 #As colunas 'modalidadeNome', 'situacaoCompraNome', 'usuarioNome', e 'orgaoEntidade.razaoSocial' são redundantes, pois já possuímos o 'modalidadeId' e 'situacaoCompraId' com
