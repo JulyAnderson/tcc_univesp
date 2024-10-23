@@ -1682,6 +1682,7 @@ class AnomalyAnalyzer:
                         anomaly_points['PC2'],
                         c=color, 
                         alpha=0.6, 
+                        s=300,
                         label=f'{level_name} Consensus')
         
         plt.title('Análises dos Consensos  (PCA)', fontsize=28)  # Ajustar o tamanho do título
