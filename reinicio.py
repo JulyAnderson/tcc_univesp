@@ -2,33 +2,48 @@
 import pandas as pd 
 import numpy as np
 import seaborn as sns
+import matplotlib.pyplot as plt
+from itertools import combinations
+from sklearn.preprocessing import  StandardScaler
+from sklearn.cluster import KMeans, DBSCAN
+from sklearn.ensemble import IsolationForest
+from sklearn.neighbors import LocalOutlierFactor
+from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
+import tensorflow as tf
+from tensorflow.keras.layers import Input, Dense, BatchNormalization, Dropout
+from tensorflow.keras.models import Model
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.optimizers import Adam
+from scipy.stats import pearsonr;
+import matplotlib.gridspec as gridspec
+from matplotlib_venn import venn2, venn3
 
 dados = pd.read_csv("dados/brutos/dados_colunas_normalizadas.csv", index_col="Unnamed: 0")
 
-
+# remover duplicadas
 dados = dados.drop_duplicates()
 
 #  0   valorTotalHomologado               2543 non-null   float64
 #  21  valorTotalEstimado                 2967 non-null   float64
-#%%
-
 # Estatísticas descritivas da coluna valorTotalHomologado
 dados['valorTotalHomologado'].describe()
-
-import matplotlib.pyplot as plt
 
 # Criar um histograma da coluna valorTotalHomologado
 dados['valorTotalHomologado'].hist(bins=10)  # bins define o número de "caixas" no gráfico
 plt.title('Distribuição de valorTotalHomologado')
 plt.xlabel('Valor Total Homologado')
 plt.ylabel('Frequência')
+plt.savefig("images/hist_distribuicao_valotHomologado.png")
 plt.show()
 
 # Criar um boxplot
 dados.boxplot(column='valorTotalHomologado')
 plt.title('Boxplot de valorTotalHomologado')
+plt.savefig("images/box_plot_valorHomologado.png")
 plt.show()
-#%%
+#
 # Calcular os quartis
 Q1 = dados['valorTotalHomologado'].quantile(0.25)  # 1º Quartil (25%)
 Q3 = dados['valorTotalHomologado'].quantile(0.75)  # 3º Quartil (75%)
@@ -54,12 +69,6 @@ dados["diff_homolagado_estimado"] = dados["valorTotalHomologado"]-dados["valorTo
 dados["diff_homolagado_estimado"].isnull().sum()
 
 correlacao = dados[["valorTotalHomologado","valorTotalEstimado","diff_homolagado_estimado"]].corr() #0,970389
-
-# %%
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import numpy as np
 
 # Configurações gerais do plot
 plt.style.use('default')  # Usando estilo default do matplotlib
@@ -127,13 +136,8 @@ plt.xlabel('Distribuição', fontsize=12)
 plt.xticks([])
 
 plt.tight_layout()
+plt.savefig("images/violin_valorHomologado.png")
 plt.show()
-
-#%%
-import pandas as pd
-import seaborn as sns
-import matplotlib.pyplot as plt
-import numpy as np
 
 # Configurações gerais do plot
 plt.style.use('default')  # Usando estilo default do matplotlib
@@ -165,12 +169,11 @@ plt.xlim(dados['valorTotalHomologado'].min(), dados['valorTotalHomologado'].max(
 
 # Exibir o gráfico
 plt.tight_layout()
+plt.show("images/hist_plot_valorHomologado_sns.png")
 plt.show()
 
-# %%
 #considerando a alta correlação e observando que valor estimado e valor homolado são iguais em todas ocorrencias
 #exceto quando o valorTotalHomolagado está ausente, optaremos pela remoção do valor totalHomologado, que possui 326 dados ausentes
-#%%
 
 dados = dados.drop(columns=["valorTotalHomologado","diff_homolagado_estimado"])
 #  Identificadores
@@ -254,7 +257,7 @@ dados.drop(columns=colunas_a_remover, inplace=True)
 
 #  Analisando as colunas de datas.
 
-from itertools import combinations
+
 
 # Converter as colunas para o formato de data
 date_columns = ['dataAberturaProposta', 
@@ -325,6 +328,7 @@ plt.grid(axis='y')
 
 # Exibir o gráfico
 plt.tight_layout()
+plt.savefig("images/duracoes.png")
 plt.show()
 
 colunas = ["duracaoInclusaoAtualizacao","duracaoProposta"]
@@ -377,6 +381,7 @@ def analyze_correlations(dados, num_correlacoes=10, figsize_heatmap=(50,30), fig
                    fmt='.2f')
         plt.title('Matriz de Correlação')
         plt.tight_layout()
+        plt.savefig("images/correlacoes.png")
         plt.show()
     
     def plot_top_correlations():
@@ -415,6 +420,7 @@ def analyze_correlations(dados, num_correlacoes=10, figsize_heatmap=(50,30), fig
         
         plt.axvline(x=0, color='black', linestyle='-', linewidth=0.5)
         plt.tight_layout()
+        plt.savefig("images/top_correlacoes.png")
         plt.show()
     
     # Exibe os resultados
@@ -436,7 +442,7 @@ def analyze_correlations(dados, num_correlacoes=10, figsize_heatmap=(50,30), fig
 resultados = analyze_correlations(dados, num_correlacoes=10)
 correlacao, correlacoes_ordenadas, maiores_correlacoes, menores_correlacoes = resultados
 
-# %% considerando as correlações, os seguintes dados serão suprimidos por apresentarem o mesmo comportamento sempre. 
+# considerando as correlações, os seguintes dados serão suprimidos por apresentarem o mesmo comportamento sempre. 
 # modoDisputaId → tipoInstrumentoConvocatorioCodigo: 1.000
 # dataAberturaProposta → dataEncerramentoProposta: 1.000
 # dataAberturaProposta → tipoInstrumentoConvocatorioCodigo: 1.000
@@ -451,38 +457,50 @@ colunas_alta_correlacao =[
 dados = dados.drop(columns = colunas_alta_correlacao)
 
 
-# %%
+
 dados.to_pickle('dados/processados/Eda.pkl')
 
-################################ Iniciando Mineração de Dados #############
-# %%
+
+################### Iniciando Mineração de Dados #############
 df = pd.read_pickle('dados/processados/eda.pkl')
 
 # Excluindo colunas do tipo data
 df = dados.select_dtypes(exclude=['datetime64[ns]'])
 
-# %%Imputar valor 0 para os valores ausentes na coluna duracaoProposta
-df['duracaoProposta'].fillna(0, inplace=True)
+# Imputar valor 1 para os valores ausentes na coluna duracaoProposta
+df['duracaoProposta'].fillna(1, inplace=True)
 
-# %% Converter booleanos em int
+# Converter booleanos em int
 df = df.astype(int)
 
-# %%
-from sklearn.preprocessing import  StandardScaler
-
+#normalização dos dados. 
 scaler = StandardScaler()
 df_normalizados = scaler.fit_transform(df)
 df_normalizados = pd.DataFrame(df_normalizados, columns=df.columns)
 
-#%%
+# Configurar o estilo do Seaborn
+sns.set_theme(style="whitegrid", palette="deep")
+sns.set()
 
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.cluster import KMeans, DBSCAN
-from sklearn.ensemble import IsolationForest
-from sklearn.neighbors import LocalOutlierFactor
-from sklearn.metrics import silhouette_score, calinski_harabasz_score, davies_bouldin_score
+#treinamento de modelos
+
+def apply_pca(df_normalizados, n_components=2):
+    """
+    Aplica PCA aos dados normalizados
+    """
+    pca = PCA(n_components=n_components)
+    dados_pca = pca.fit_transform(df_normalizados)
+    return dados_pca, pca
+
+def create_pca_dataframe(dados_pca, df, column):
+    """
+    Cria um DataFrame com os resultados do PCA e informações de anomalia
+    """
+    return pd.DataFrame({
+        'PC1': dados_pca[:, 0],
+        'PC2': dados_pca[:, 1],
+        'Tipo': np.where(df[column], 'Anomalia', 'Normal')
+    })
 
 def detect_anomalies_kmeans(df, df_normalizados, n_clusters=2, percentil=95, random_state=42):
     """
@@ -622,6 +640,7 @@ def plot_anomalies_comparison(df, df_normalizados):
         ax.grid(True)
     
     plt.tight_layout()
+    plt.savefig('images/anomalies_comparison.png')  # Salva automaticamente ao plotar
     plt.show()
 
 def plot_consensus_anomalies(df, df_normalizados):
@@ -644,6 +663,7 @@ def plot_consensus_anomalies(df, df_normalizados):
     plt.ylabel('Duração da Proposta (Normalizada)')
     plt.title('Consenso entre Métodos de Detecção de Anomalias')
     plt.grid(True)
+    plt.savefig('images/concensus_anomalies.png')  # Salva automaticamente ao plotar
     plt.show()
 
 def print_anomaly_summary(df):
@@ -783,6 +803,7 @@ def plot_best_model(df, df_normalizados, model_name, anomaly_column):
     plt.ylabel('Duração da Proposta (Normalizada)')
     plt.legend()
     plt.grid(True)
+
     
     # Distribuição das características para pontos normais vs anomalias
     plt.subplot(2, 2, 2)
@@ -817,9 +838,9 @@ def plot_best_model(df, df_normalizados, model_name, anomaly_column):
               'Normal\nDuração', 'Anomalia\nDuração']
     plt.boxplot(data_to_plot, labels=labels)
     plt.title('Comparação das Distribuições')
-    plt.xticks(rotation=45)
-    
+    plt.xticks(rotation=45)    
     plt.tight_layout()
+    plt.savefig('images/best_model.png')  # Salva automaticamente ao plotar
     plt.show()
 
 def print_model_evaluation(evaluations):
@@ -853,7 +874,205 @@ def print_model_evaluation(evaluations):
     
     return best_model
 
-# Exemplo de uso:
+def plot_anomalies_comparison_pca(df, df_normalizados):
+    """
+    Plota comparação das anomalias detectadas por diferentes métodos usando PCA com Seaborn
+    """
+    dados_pca, pca = apply_pca(df_normalizados)
+    var_ratio = pca.explained_variance_ratio_
+    
+    fig = plt.figure(figsize=(20, 20))
+    
+    methods = {
+        'K-Means': 'anomalia_kmeans',
+        'DBSCAN': 'anomalia_dbscan',
+        'LOF': 'anomalia_lof',
+        'Isolation Forest': 'anomalia_iforest'
+    }
+    
+    for idx, (title, column) in enumerate(methods.items(), 1):
+        plt.subplot(2, 2, idx)
+        
+        # Criar DataFrame para Seaborn
+        plot_df = create_pca_dataframe(dados_pca, df, column)
+        
+        # Criar scatter plot com Seaborn
+        sns.scatterplot(
+            data=plot_df,
+            x='PC1',
+            y='PC2',
+            hue='Tipo',
+            style='Tipo',
+            palette={'Normal': 'blue', 'Anomalia': 'red'},
+            alpha=0.6,
+            s=100
+        )
+        
+        plt.title(f'Anomalias - {title}\nVariância explicada: PC1={var_ratio[0]:.2%}, PC2={var_ratio[1]:.2%}')
+        plt.xlabel('Primeira Componente Principal')
+        plt.ylabel('Segunda Componente Principal')
+    
+    plt.tight_layout()
+    plt.savefig('images/anomalies_comparison_pca.png')  # Salva automaticamente ao plotar
+    plt.show()
+
+def plot_consensus_anomalies_pca(df, df_normalizados):
+    """
+    Plota anomalias baseadas no consenso entre os métodos usando PCA com Seaborn
+    """
+    dados_pca, pca = apply_pca(df_normalizados)
+    var_ratio = pca.explained_variance_ratio_
+    
+    plt.figure(figsize=(12, 8))
+    
+    # Criar DataFrame para Seaborn
+    plot_df = pd.DataFrame({
+        'PC1': dados_pca[:, 0],
+        'PC2': dados_pca[:, 1],
+        'Consenso': df['anomalia_consenso']
+    })
+    
+    # Usar Seaborn para criar um scatter plot com gradiente de cores
+    sns.scatterplot(
+        data=plot_df,
+        x='PC1',
+        y='PC2',
+        hue='Consenso',
+        palette='YlOrRd',
+        size='Consenso',
+        sizes=(100, 400),
+        legend='full'
+    )
+    
+    plt.title(f'Consenso entre Métodos de Detecção de Anomalias (PCA)\n' +
+              f'Variância explicada: PC1={var_ratio[0]:.2%}, PC2={var_ratio[1]:.2%}')
+    plt.xlabel('Primeira Componente Principal')
+    plt.ylabel('Segunda Componente Principal')
+    plt.savefig('images/concensus_anomalies_pca.png')  # Salva automaticamente ao plotar
+    plt.show()
+
+def plot_best_model_pca(df, df_normalizados, model_name, anomaly_column):
+    """
+    Cria visualizações detalhadas para o melhor modelo usando PCA e Seaborn
+    """
+    dados_pca, pca = apply_pca(df_normalizados)
+    var_ratio = pca.explained_variance_ratio_
+    
+    # Criar DataFrame com resultados do PCA
+    plot_df = create_pca_dataframe(dados_pca, df, anomaly_column)
+    plot_df['Valor Total'] = df['valorTotalEstimado']
+    plot_df['Duração'] = df['duracaoProposta']
+    
+    # Configurar o grid de subplots
+    fig = plt.figure(figsize=(20, 15))
+    gs = plt.GridSpec(2, 3, figure=fig)
+    
+    # 1. Scatter plot principal com PCA
+    ax1 = fig.add_subplot(gs[0, :2])
+    sns.scatterplot(
+        data=plot_df,
+        x='PC1',
+        y='PC2',
+        hue='Tipo',
+        style='Tipo',
+        palette={'Normal': 'blue', 'Anomalia': 'red'},
+        alpha=0.6,
+        s=100,
+        ax=ax1
+    )
+    ax1.set_title(f'Anomalias Detectadas - {model_name}\n' +
+                  f'Variância explicada: PC1={var_ratio[0]:.2%}, PC2={var_ratio[1]:.2%}')
+    
+    # 2. Scree plot
+    ax2 = fig.add_subplot(gs[0, 2])
+    sns.lineplot(
+        x=range(1, len(var_ratio) + 1),
+        y=np.cumsum(var_ratio),
+        marker='o',
+        ax=ax2
+    )
+    ax2.set_title('Scree Plot')
+    ax2.set_xlabel('Número de Componentes')
+    ax2.set_ylabel('Variância Explicada Acumulada')
+    
+    # 3. Distribuições das features originais
+    ax3 = fig.add_subplot(gs[1, 0])
+    sns.boxenplot(
+        data=plot_df,
+        x='Tipo',
+        y='Valor Total',
+        ax=ax3
+    )
+    ax3.set_title('Distribuição do Valor Total por Tipo')
+    
+    ax4 = fig.add_subplot(gs[1, 1])
+    sns.boxenplot(
+        data=plot_df,
+        x='Tipo',
+        y='Duração',
+        ax=ax4
+    )
+    ax4.set_title('Distribuição da Duração por Tipo')
+    
+    # 4. Joint plot das componentes principais
+    ax5 = fig.add_subplot(gs[1, 2])
+    sns.kdeplot(
+        data=plot_df,
+        x='PC1',
+        y='PC2',
+        hue='Tipo',
+        ax=ax5,
+        fill=True,
+        alpha=0.5
+    )
+    ax5.set_title('Densidade das Componentes Principais')
+    plt.tight_layout()
+    plt.savefig('images/best_model_pca_densidade.png')  # Salva automaticamente ao plotar
+    plt.show()
+    
+    # Plot adicional: Pair plot para análise multivariada
+    pair_df = plot_df[['PC1', 'PC2', 'Valor Total', 'Duração', 'Tipo']]
+    sns.pairplot(
+        pair_df,
+        hue='Tipo',
+        palette={'Normal': 'blue', 'Anomalia': 'red'},
+        diag_kind='kde'
+    )
+    plt.savefig('images/best_model_pair_plot.png')  # Salva automaticamente ao plotar
+    plt.show()
+
+def plot_correlation_analysis(df, df_normalizados):
+    """
+    Análise de correlação entre as features originais e as componentes principais
+    """
+    dados_pca, pca = apply_pca(df_normalizados)
+    
+    # Criar DataFrame com features originais e componentes principais
+    corr_df = pd.DataFrame({
+        'Valor Total': df['valorTotalEstimado'],
+        'Duração': df['duracaoProposta'],
+        'PC1': dados_pca[:, 0],
+        'PC2': dados_pca[:, 1]
+    })
+    
+    # Calcular matriz de correlação
+    corr_matrix = corr_df.corr()
+    
+    # Plotar mapa de calor das correlações
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(
+        corr_matrix,
+        annot=True,
+        cmap='coolwarm',
+        center=0,
+        square=True,
+        fmt='.2f',
+        linewidths=0.5
+    )
+    plt.title('Correlação entre Features Originais e Componentes Principais')
+    plt.savefig('images/correlation_analysis.png')  # Salva automaticamente ao plotagem
+    plt.show()
+
 def run_anomaly_detection_analysis(df, df_normalizados, params=None):
     """
     Executa a análise completa de detecção de anomalias
@@ -890,6 +1109,43 @@ def run_anomaly_detection_analysis(df, df_normalizados, params=None):
     
     return df_results, models, evaluations, best_model
 
+def run_anomaly_detection_analysis_pca(df, df_normalizados, params=None):
+    """
+    Executa a análise completa de detecção de anomalias com visualizações aprimoradas
+    """
+    # Detectar anomalias e avaliar modelos
+    df_results, models, evaluations = detect_all_anomalies_with_evaluation(
+        df, df_normalizados, params
+    )
+    
+    # Imprimir avaliação e identificar melhor modelo
+    best_model = print_model_evaluation(evaluations)
+    
+    # Mapear nome do modelo para coluna de anomalia
+    anomaly_columns = {
+        'K-Means': 'anomalia_kmeans',
+        'DBSCAN': 'anomalia_dbscan',
+        'LOF': 'anomalia_lof',
+        'Isolation Forest': 'anomalia_iforest'
+    }
+    
+    if best_model and best_model in anomaly_columns:
+        # Plotar visualizações detalhadas para o melhor modelo
+        plot_best_model_pca(
+            df_results, 
+            df_normalizados, 
+            best_model,
+            anomaly_columns[best_model]
+        )
+    
+    # Visualizar resultados
+    plot_anomalies_comparison_pca(df_results, df_normalizados)
+    plot_consensus_anomalies_pca(df_results, df_normalizados)
+    plot_correlation_analysis(df_results, df_normalizados)
+    print_anomaly_summary(df_results)
+    
+    return df_results, models, evaluations, best_model
+
 # Configurar parâmetros
 params = {
     'kmeans': {'n_clusters': 2, 'percentil': 95},
@@ -902,34 +1158,23 @@ params = {
 if isinstance(df_normalizados, pd.DataFrame):
     df_normalizados = df_normalizados.values
 
-# %%
 
 df_normalizados = scaler.fit_transform(df)
 
 # Executar análise completa
-df_results, models, evaluations, best_model = run_anomaly_detection_analysis(
+df, models, evaluations, best_model = run_anomaly_detection_analysis(
     df, df_normalizados, params
 )
 
+df, models, evaluations, best_model = run_anomaly_detection_analysis_pca(df, df_normalizados, params)
+
+#
 # Visualizar resultados
 plot_anomalies_comparison(df, df_normalizados)
 plot_consensus_anomalies(df, df_normalizados)
 print_anomaly_summary(df)
 
-
 ############################### Rede Neural ###################################
-# %%
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import train_test_split
-import tensorflow as tf
-from tensorflow.keras.layers import Input, Dense, BatchNormalization, Dropout
-from tensorflow.keras.models import Model
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
-from tensorflow.keras.optimizers import Adam
 
 class DeepAnomalyDetector:
     def __init__(self, encoding_dim=8, hidden_layers=[32, 16]):
@@ -1051,7 +1296,6 @@ class DeepAnomalyDetector:
         plt.xlabel('Epoch')
         plt.ylabel('Loss')
         plt.legend()
-        
         plt.tight_layout()
         plt.show()
     
@@ -1110,6 +1354,8 @@ class DeepAnomalyDetector:
             plt.ylim(0, 1)
             
         plt.tight_layout()
+        plt.savefig('images/anomaly_detection.png')  # Salva automaticamente ao plotar
+
         plt.show()
 
 def compare_with_traditional(df, deep_predictions, traditional_predictions):
@@ -1135,6 +1381,7 @@ def compare_with_traditional(df, deep_predictions, traditional_predictions):
     plt.ylabel(df.columns[1])
     
     plt.tight_layout()
+    plt.savefig('images/compare_with_traditional.png')  # Salva automaticamente ao plotar
     plt.show()
     
     # Calcular concordância entre os métodos
@@ -1169,6 +1416,7 @@ def run_deep_anomaly_detection(df, traditional_anomalies=None):
     
     # Detectar anomalias
     anomalies = detector.predict(df)
+
     
     # Visualizar resultados
     detector.plot_anomaly_detection(df, traditional_anomalies)
@@ -1180,405 +1428,364 @@ def run_deep_anomaly_detection(df, traditional_anomalies=None):
     return detector, anomalies
 
 
-# %%
 # Obter as anomalias do melhor modelo tradicional
-traditional_anomalies = df_results[f'anomalia_{best_model.lower()}']
+traditional_anomalies = df[f'anomalia_{best_model.lower()}']
 
 # Executar o detector baseado em deep learning
 detector, deep_anomalies = run_deep_anomaly_detection(df, traditional_anomalies)
 
-# %%
-
-###################### Analise Final #########################
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.preprocessing import StandardScaler
-from scipy.stats import pearsonr;
-import matplotlib.gridspec as gridspec
-from matplotlib_venn import venn2, venn3
-
-def analyze_consensus_anomalies(df, traditional_results, deep_anomalies, models):
-    """
-    Analisa as anomalias detectadas em comum entre todos os métodos
-    
-    Parâmetros:
-    df: DataFrame original
-    traditional_results: DataFrame com resultados dos métodos tradicionais
-    deep_anomalies: array boolean com resultados do deep learning
-    models: dicionário com os modelos treinados
-    """
-    # Criar DataFrame com todos os resultados
-    results_df = pd.DataFrame({
-        'KMeans': traditional_results['anomalia_kmeans'],
-        'DBSCAN': traditional_results['anomalia_dbscan'],
-        'LOF': traditional_results['anomalia_lof'],
-        'IForest': traditional_results['anomalia_iforest'],
-        'DeepLearning': deep_anomalies
-    })
-    
-    # Calcular consenso
-    results_df['n_detections'] = results_df.sum(axis=1)
-    
-    # Identificar anomalias por nível de consenso
-    consensus_levels = {
-        'full': results_df['n_detections'] == 5,  # Todos os métodos
-        'strong': results_df['n_detections'] >= 4, # Pelo menos 4 métodos
-        'moderate': results_df['n_detections'] >= 3, # Pelo menos 3 métodos
-        'weak': results_df['n_detections'] >= 2  # Pelo menos 2 métodos
-    }
-    
-    # Criar visualizações
-    plot_consensus_analysis(df, results_df, consensus_levels)
-    
-    # Análise detalhada das anomalias em comum
-    analyze_common_anomalies(df, results_df, consensus_levels)
-    
-    return results_df, consensus_levels
-
-def plot_consensus_analysis(df, results_df, consensus_levels):
-    """
-    Cria visualizações detalhadas da análise de consenso
-    """
-    plt.figure(figsize=(20, 15))
-    gs = gridspec.GridSpec(3, 3)
-    
-    # 1. Scatter plot com níveis de consenso
-    ax1 = plt.subplot(gs[0, :2])
-    scatter = ax1.scatter(df.iloc[:, 0], df.iloc[:, 1],
-                         c=results_df['n_detections'],
-                         cmap='RdYlBu_r', alpha=0.6)
-    ax1.set_title('Níveis de Consenso na Detecção de Anomalias')
-    ax1.set_xlabel(df.columns[0])
-    ax1.set_ylabel(df.columns[1])
-    plt.colorbar(scatter, ax=ax1, label='Número de Métodos que Detectaram')
-    
-    # 2. Diagrama de Venn (3 principais métodos)
-    ax2 = plt.subplot(gs[0, 2])
-    top_methods = ['KMeans', 'DBSCAN', 'DeepLearning']
-    venn3([set(np.where(results_df[method])[0]) for method in top_methods],
-          set_labels=top_methods, ax=ax2)
-    ax2.set_title('Interseção entre Principais Métodos')
-    
-    # 3. Heatmap de correlação entre métodos
-    ax3 = plt.subplot(gs[1, 0])
-    corr_matrix = results_df.iloc[:, :5].corr()
-    sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0, ax=ax3)
-    ax3.set_title('Correlação entre Métodos')
-    
-    # 4. Barplot de contagem por nível de consenso
-    ax4 = plt.subplot(gs[1, 1])
-    consensus_counts = {
-        'Consenso Total (5)': sum(consensus_levels['full']),
-        'Forte (≥4)': sum(consensus_levels['strong']),
-        'Moderado (≥3)': sum(consensus_levels['moderate']),
-        'Fraco (≥2)': sum(consensus_levels['weak'])
-    }
-    colors = ['darkred', 'red', 'orange', 'yellow']
-    ax4.bar(consensus_counts.keys(), consensus_counts.values(), color=colors)
-    ax4.set_title('Distribuição dos Níveis de Consenso')
-    ax4.tick_params(axis='x', rotation=45)
-    
-    # 5. Características das anomalias por consenso
-    ax5 = plt.subplot(gs[1, 2])
-    boxplot_data = [
-        df.iloc[:, 0][consensus_levels['full']],
-        df.iloc[:, 0][consensus_levels['strong']],
-        df.iloc[:, 0][consensus_levels['moderate']],
-        df.iloc[:, 0][consensus_levels['weak']]
-    ]
-    ax5.boxplot(boxplot_data, labels=['Total', 'Forte', 'Moderado', 'Fraco'])
-    ax5.set_title(f'Distribuição de {df.columns[0]} por Nível de Consenso')
-    
-    # 6. Scatter plots para cada nível de consenso
-    consensus_names = ['full', 'strong', 'moderate', 'weak']
-    for idx, (name, mask) in enumerate(consensus_levels.items()):
-        ax = plt.subplot(gs[2, idx])
-        ax.scatter(df.iloc[:, 0], df.iloc[:, 1], c='lightgray', alpha=0.3)
-        ax.scatter(df.iloc[mask, 0], df.iloc[mask, 1], c='red', alpha=0.6)
-        ax.set_title(f'Anomalias com Consenso {name.capitalize()}')
-        ax.set_xlabel(df.columns[0])
-        ax.set_ylabel(df.columns[1])
-    
-    plt.tight_layout()
-    plt.show()
-
-def analyze_common_anomalies(df, results_df, consensus_levels):
-    """
-    Realiza análise estatística das anomalias em comum
-    """
-    print("\nAnálise das Anomalias por Nível de Consenso:")
-    print("-" * 50)
-    
-    for level_name, mask in consensus_levels.items():
-        n_anomalies = sum(mask)
-        print(f"\n{level_name.capitalize()} Consensus ({n_anomalies} anomalias):")
+# %% ###################### Analise Final #########################
+class TraditionalDetector:
+    def __init__(self):
+        self.models = {}
+        self.scaler = StandardScaler()
         
-        if n_anomalies > 0:
-            # Estatísticas básicas
-            stats = df[mask].describe()
-            print("\nEstatísticas das anomalias:")
-            print(stats)
+    def fit_predict_kmeans(self, X, n_clusters=2, percentile=95):
+        kmeans = KMeans(n_clusters=n_clusters, random_state=42)
+        clusters = kmeans.fit_predict(X)
+        
+        # Calculate distances to centroids
+        distances = kmeans.transform(X).min(axis=1)
+        threshold = np.percentile(distances, percentile)
+        anomalies = distances > threshold
+        
+        self.models['KMeans'] = kmeans
+        return pd.Series(anomalies, index=X.index)
+    
+    def fit_predict_dbscan(self, X, eps=0.5, min_samples=5):
+        dbscan = DBSCAN(eps=eps, min_samples=min_samples)
+        labels = dbscan.fit_predict(X)
+        anomalies = labels == -1
+        
+        self.models['DBSCAN'] = dbscan
+        return pd.Series(anomalies, index=X.index)
+    
+    def fit_predict_lof(self, X, n_neighbors=20, contamination=0.1):
+        lof = LocalOutlierFactor(n_neighbors=n_neighbors, 
+                                contamination=contamination,
+                                novelty=True)
+        lof.fit(X)
+        predictions = lof.predict(X)
+        anomalies = predictions == -1
+        
+        self.models['LOF'] = lof
+        return pd.Series(anomalies, index=X.index)
+    
+    def fit_predict_iforest(self, X, contamination=0.1):
+        iforest = IsolationForest(contamination=contamination, 
+                                 random_state=42)
+        predictions = iforest.fit_predict(X)
+        anomalies = predictions == -1
+        
+        self.models['IForest'] = iforest
+        return pd.Series(anomalies, index=X.index)
+    
+    def fit_predict_all(self, X, params=None):
+        if params is None:
+            params = {
+                'kmeans': {'n_clusters': 2, 'percentile': 95},
+                'dbscan': {'eps': 0.5, 'min_samples': 5},
+                'lof': {'n_neighbors': 20, 'contamination': 0.1},
+                'iforest': {'contamination': 0.1}
+            }
+        
+        X_scaled = pd.DataFrame(
+            self.scaler.fit_transform(X),
+            index=X.index,
+            columns=X.columns
+        )
+        
+        results = pd.DataFrame({
+            'KMeans': self.fit_predict_kmeans(X_scaled, **params['kmeans']),
+            'DBSCAN': self.fit_predict_dbscan(X_scaled, **params['dbscan']),
+            'LOF': self.fit_predict_lof(X_scaled, **params['lof']),
+            'IForest': self.fit_predict_iforest(X_scaled, **params['iforest'])
+        }, index=X.index)
+        
+        return results
+
+class DeepAnomalyDetector:
+    def __init__(self, encoding_dim=8, hidden_layers=[32, 16]):
+        self.encoding_dim = encoding_dim
+        self.hidden_layers = hidden_layers
+        self.autoencoder = None
+        self.encoder = None
+        self.history = None
+        self.threshold = None
+        self.scaler = StandardScaler()
+        
+    def create_autoencoder(self, input_dim):
+        """
+        Create the autoencoder architecture with the specified dimensions.
+        
+        Args:
+            input_dim (int): Number of input features
+        """
+        # Input layer
+        input_layer = Input(shape=(input_dim,))
+        
+        # Encoder
+        encoded = input_layer
+        for units in self.hidden_layers:
+            encoded = Dense(units, activation='relu')(encoded)
+            encoded = BatchNormalization()(encoded)
+            encoded = Dropout(0.2)(encoded)
             
-            # Características distintivas
-            if n_anomalies >= 2:
-                for col in df.columns:
-                    normal_data = df.loc[~mask, col]
-                    anomaly_data = df.loc[mask, col]
-                    
-                    # Teste de correlação
-                    corr, p_value = pearsonr(
-                        df[col],
-                        results_df['n_detections']
-                    )
-                    
-                    print(f"\nCaracterística: {col}")
-                    print(f"Correlação com número de detecções: {corr:.3f} (p-value: {p_value:.3f})")
-                    
-                    # Comparação de distribuições
-                    print(f"Média (Normal): {normal_data.mean():.2f}")
-                    print(f"Média (Anomalia): {anomaly_data.mean():.2f}")
-                    print(f"Desvio Padrão (Normal): {normal_data.std():.2f}")
-                    print(f"Desvio Padrão (Anomalia): {anomaly_data.std():.2f}")
+        # Bottleneck layer
+        bottleneck = Dense(self.encoding_dim, activation='relu')(encoded)
+        
+        # Decoder (mirror of encoder)
+        decoded = bottleneck
+        for units in reversed(self.hidden_layers):
+            decoded = Dense(units, activation='relu')(decoded)
+            decoded = BatchNormalization()(decoded)
+            decoded = Dropout(0.2)(decoded)
+            
+        # Output layer
+        output_layer = Dense(input_dim, activation='linear')(decoded)
+        
+        # Create models
+        self.autoencoder = Model(input_layer, output_layer)
+        self.encoder = Model(input_layer, bottleneck)
+        
+        # Compile autoencoder
+        self.autoencoder.compile(
+            optimizer=Adam(learning_rate=0.001),
+            loss='mse'
+        )
+        
+    def fit(self, X, validation_split=0.1, epochs=100, batch_size=32):
+        """
+        Fit the autoencoder to the data.
+        
+        Args:
+            X: Input data
+            validation_split: Fraction of data to use for validation
+            epochs: Number of training epochs
+            batch_size: Batch size for training
+            
+        Returns:
+            self
+        """
+        X_scaled = self.scaler.fit_transform(X)
+        
+        if self.autoencoder is None:
+            self.create_autoencoder(X.shape[1])
+        
+        early_stopping = EarlyStopping(
+            monitor='val_loss',
+            patience=10,
+            restore_best_weights=True
+        )
+        
+        self.history = self.autoencoder.fit(
+            X_scaled, X_scaled,
+            epochs=epochs,
+            batch_size=batch_size,
+            validation_split=validation_split,
+            callbacks=[early_stopping],
+            verbose=1
+        )
+        
+        # Calculate reconstruction error threshold
+        reconstructed = self.autoencoder.predict(X_scaled)
+        mse = np.mean(np.power(X_scaled - reconstructed, 2), axis=1)
+        self.threshold = np.percentile(mse, 95)
+        
+        return self
+    
+    def predict(self, X):
+        """
+        Predict anomalies in new data.
+        
+        Args:
+            X: Input data
+            
+        Returns:
+            Series of boolean values (True for anomalies)
+        """
+        X_scaled = self.scaler.transform(X)
+        reconstructed = self.autoencoder.predict(X_scaled)
+        mse = np.mean(np.power(X_scaled - reconstructed, 2), axis=1)
+        return pd.Series(mse > self.threshold, index=X.index)
+    
+    def get_reconstruction_error(self, X):
+        """
+        Get reconstruction error for each sample.
+        
+        Args:
+            X: Input data
+            
+        Returns:
+            Array of reconstruction errors
+        """
+        X_scaled = self.scaler.transform(X)
+        reconstructed = self.autoencoder.predict(X_scaled)
+        return np.mean(np.power(X_scaled - reconstructed, 2), axis=1)
 
-def run_complete_anomaly_analysis(df, df_normalizados):
+class AnomalyAnalyzer:
+    def __init__(self, data):
+        self.data = data
+        self.results = None
+        self.pca = None
+        self.scaler = StandardScaler()
+        
+    def prepare_data(self):
+        scaled_data = self.scaler.fit_transform(self.data)
+        self.pca = PCA(n_components=2)
+        self.pca_data = pd.DataFrame(
+            self.pca.fit_transform(scaled_data),
+            columns=['PC1', 'PC2'],
+            index=self.data.index
+        )
+        
+    def analyze_consensus(self, method_results):
+        # Ensure method_results has the same index as the data
+        self.results = pd.DataFrame(method_results, index=self.data.index)
+        self.results['n_detections'] = self.results.sum(axis=1)
+        
+        consensus_levels = {
+            'Total': pd.Series(self.results['n_detections'] == len(method_results.columns), 
+                             index=self.data.index),
+            'Forte': pd.Series(self.results['n_detections'] >= len(method_results.columns) - 1,
+                              index=self.data.index),
+            'Moderada': pd.Series(self.results['n_detections'] >= len(method_results.columns) - 2,
+                                index=self.data.index),
+            'Fraca': pd.Series(self.results['n_detections'] >= 1,
+                            index=self.data.index)
+        }
+        
+        self.plot_consensus_analysis(consensus_levels)
+        self.print_consensus_statistics(consensus_levels)
+        
+        return consensus_levels
+        
+    def plot_consensus_analysis(self, consensus_levels):
+        plt.figure(figsize=(40, 30))
+        
+        # Definir o tamanho da fonte globalmente
+        plt.rcParams.update({'font.size': 24})  # Define o tamanho da fonte para todo o gráfico
+        
+        # PCA scatter plot
+        plt.subplot(2, 2, 1)
+        
+        # Plot all points first
+        plt.scatter(self.pca_data['PC1'], self.pca_data['PC2'], 
+                c='lightgray', alpha=0.3, label='Normal')
+        
+        # Plot anomalies with different colors
+        colors = ['red', 'orange', 'yellow', 'green']
+        for (level_name, mask), color in zip(consensus_levels.items(), colors):
+            anomaly_points = self.pca_data[mask]
+            if not anomaly_points.empty:
+                plt.scatter(anomaly_points['PC1'], 
+                        anomaly_points['PC2'],
+                        c=color, 
+                        alpha=0.6, 
+                        label=f'{level_name} Consensus')
+        
+        plt.title('Análises dos Consensos  (PCA)', fontsize=28)  # Ajustar o tamanho do título
+        plt.xlabel('Primeira Componente Principal', fontsize=24)  # Ajustar o tamanho do rótulo do eixo X
+        plt.ylabel('Segunda Componente Principal', fontsize=24)  # Ajustar o tamanho do rótulo do eixo Y
+        plt.legend(fontsize=20)  # Ajustar o tamanho da legenda
+        
+        # Detection distribution
+        plt.subplot(2, 2, 2)
+        self.results['n_detections'].hist(bins=len(self.results.columns)-1)
+        plt.title('Detecção de Distribuição', fontsize=28)
+        plt.xlabel('Número de Métodos', fontsize=24)
+        plt.ylabel('Frequência', fontsize=24)
+        
+        # Consensus levels
+        plt.subplot(2, 2, 3)
+        counts = [mask.sum() for mask in consensus_levels.values()]
+        plt.bar(consensus_levels.keys(), counts)
+        plt.title('Anomalias por Nível de Consenso', fontsize=28)
+        plt.xticks(rotation=45, fontsize=22)  # Ajustar o tamanho das marcas no eixo X
+        
+        # Feature importance
+        plt.subplot(2, 2, 4)
+        importance = pd.Series(
+            self.pca.explained_variance_ratio_,
+            index=[f'PC{i+1}' for i in range(len(self.pca.explained_variance_ratio_))]
+        )
+        importance.plot(kind='bar')
+        plt.title('PCA - Razão de Variância Explicada', fontsize=28)
+        
+        plt.tight_layout()
+        plt.savefig("images/consensus_analisys.png")
+        plt.show()
+
+        
+    def print_consensus_statistics(self, consensus_levels):
+        print("\nConsensus Statistics:")
+        for level_name, mask in consensus_levels.items():
+            n_anomalies = mask.sum()
+            percentage = (n_anomalies / len(self.data)) * 100
+            print(f"\n{level_name} Consensus:")
+            print(f"Number of anomalies: {n_anomalies}")
+            print(f"Percentage of total: {percentage:.2f}%")
+            
+            if n_anomalies > 0:
+                anomaly_data = self.data[mask]
+                print("\nDescriptive statistics for anomalies:")
+                print(anomaly_data.describe().round(2))
+
+def run_complete_analysis(data):
     """
-    Executa análise completa incluindo todos os métodos e consenso
+    Run complete anomaly detection analysis using all methods.
+    
+    Args:
+        data: Input DataFrame
+        
+    Returns:
+        Dictionary containing all detectors and results
     """
-    # 1. Executar métodos tradicionais
-    params = {
-        'kmeans': {'n_clusters': 2, 'percentil': 95},
-        'dbscan': {'eps': 0.5, 'min_samples': 5},
-        'lof': {'n_neighbors': 20, 'contamination': 0.1},
-        'iforest': {'contamination': 0.1}
+    # 1. Traditional Methods
+    trad_detector = TraditionalDetector()
+    traditional_results = trad_detector.fit_predict_all(data)
+    
+    # 2. Deep Learning
+    deep_detector = DeepAnomalyDetector()
+    deep_detector.fit(data)
+    deep_predictions = deep_detector.predict(data)
+    
+    # 3. Combine all results
+    all_results = traditional_results.copy()
+    all_results['DeepLearning'] = deep_predictions
+    
+    # 4. Analyze results
+    analyzer = AnomalyAnalyzer(data)
+    analyzer.prepare_data()
+    consensus_levels = analyzer.analyze_consensus(all_results)
+    
+    return {
+        'traditional_detector': trad_detector,
+        'deep_detector': deep_detector,
+        'analyzer': analyzer,
+        'consensus_levels': consensus_levels,
+        'all_results': all_results
     }
-    
-    traditional_results, models, evaluations, best_model = run_anomaly_detection_analysis(
-        df, df_normalizados, params
-    )
-    
-    # 2. Executar deep learning
-    detector, deep_anomalies = run_deep_anomaly_detection(
-        df, traditional_results[f'anomalia_{best_model.lower()}']
-    )
-    
-    # 3. Análise de consenso
-    results_df, consensus_levels = analyze_consensus_anomalies(
-        df, traditional_results, deep_anomalies, models
-    )
-    
-    return results_df, consensus_levels, detector, models
 
-# %%
-results_df, consensus_levels, detector, models = run_complete_anomaly_analysis(df, df_normalizados)
+# Exemplo de uso:
+# Carregar seus dados
+data = df # Seus dados aqui
 
-# %%
+# Executar análise completa
+results = run_complete_analysis(data)
 
-consenso = df[(df["anomalia_consenso"] == 3) | (df["anomalia_consenso"] == 4)]
-# %%
-print(df.describe())
+# Acessar resultados
+traditional_detector = results['traditional_detector']
+deep_detector = results['deep_detector']
+analyzer = results['analyzer']
+consensus_levels = results['consensus_levels']
+all_results = results['all_results']
 
-plt.figure(figsize=(16, 16))
-df.hist(figsize=(16, 16))
-plt.tight_layout()
-plt.show()
-
-
-# %%
-
-# Criar um DataFrame com os resultados de cada método
-comparison_df = pd.DataFrame({
-    'KMeans': df_results['anomalia_kmeans'],
-    'DBSCAN': df_results['anomalia_dbscan'],
-    'LOF': df_results['anomalia_lof'],
-    'IForest': df_results['anomalia_iforest']
-})
-
-# Calcular a porcentagem de anomalias detectadas por cada método
-anomaly_percentages = comparison_df.mean() * 100
-
-# Criar um gráfico de barras
-plt.figure(figsize=(10, 6))
-anomaly_percentages.plot(kind='bar')
-plt.title('Porcentagem de Anomalias Detectadas por Método')
-plt.ylabel('Porcentagem de Anomalias')
-plt.ylim(0, 100)
-for i, v in enumerate(anomaly_percentages):
-    plt.text(i, v + 1, f'{v:.2f}%', ha='center')
-plt.tight_layout()
-plt.show()
-
-# %%
-print(f"Melhor modelo tradicional: {best_model}")
-print("\nMétricas de avaliação:")
-for metric, value in evaluations[best_model].items():
-    print(f"- {metric}: {value:.4f}")
-
-# %%
-# Criar um DataFrame com os resultados de todos os métodos
-consensus_df = pd.DataFrame({
-    'KMeans': df_results['anomalia_kmeans'],
-    'DBSCAN': df_results['anomalia_dbscan'],
-    'LOF': df_results['anomalia_lof'],
-    'IForest': df_results['anomalia_iforest']
-})
-
-# Calcular o número de detecções por registro
-consensus_df['n_detections'] = consensus_df.sum(axis=1)
-
-# Criar visualização
-plt.figure(figsize=(15, 10))
-
-# Subplot 1: Scatter plot do valor total estimado vs duração da proposta
-plt.subplot(2, 2, 1)
-scatter = plt.scatter(df['valorTotalEstimado'], 
-                     df['duracaoProposta'],
-                     c=consensus_df['n_detections'],
-                     cmap='viridis',
-                     alpha=0.6)
-plt.colorbar(scatter, label='Número de métodos que detectaram como anomalia')
-plt.title('Consenso na Detecção de Anomalias')
-plt.xlabel('Valor Total Estimado')
-plt.ylabel('Duração da Proposta')
-
-# Subplot 2: Distribuição do número de detecções
-plt.subplot(2, 2, 2)
-consensus_df['n_detections'].hist(bins=5)
-plt.title('Distribuição do Número de Detecções')
-plt.xlabel('Número de Métodos')
-plt.ylabel('Frequência')
-
-# Definir níveis de consenso
-consensus_levels = {
-    'Consenso Total (4)': consensus_df['n_detections'] == 4,
-    'Forte (≥3)': consensus_df['n_detections'] >= 3,
-    'Moderado (≥2)': consensus_df['n_detections'] >= 2,
-    'Fraco (≥1)': consensus_df['n_detections'] >= 1
-}
-
-# Subplot 3: Barplot do número de anomalias por nível de consenso
-plt.subplot(2, 2, 3)
-counts = [sum(mask) for mask in consensus_levels.values()]
-plt.bar(consensus_levels.keys(), counts)
-plt.xticks(rotation=45)
-plt.title('Número de Anomalias por Nível de Consenso')
-plt.ylabel('Número de Registros')
-
-# Subplot 4: Boxplot dos valores por nível de consenso
-plt.subplot(2, 2, 4)
-consensus_data = []
-labels = []
-for level_name, mask in consensus_levels.items():
-    consensus_data.append(df.loc[mask, 'valorTotalEstimado'])
-    labels.append(level_name)
-
-plt.boxplot(consensus_data, labels=labels)
-plt.xticks(rotation=45)
-plt.title('Distribuição dos Valores por Nível de Consenso')
-plt.ylabel('Valor Total Estimado')
-
-plt.tight_layout()
-plt.show()
-
-# Imprimir estatísticas para cada nível de consenso
+# Ver estatísticas dos níveis de consenso
+print("\nEstatísticas por nível de consenso:")
 for level_name, mask in consensus_levels.items():
     n_anomalies = sum(mask)
     print(f"\n{level_name} ({n_anomalies} anomalias):")
-    print("\nEstatísticas do Valor Total Estimado:")
-    print(df.loc[mask, 'valorTotalEstimado'].describe())
-    print("\nEstatísticas da Duração da Proposta:")
-    print(df.loc[mask, 'duracaoProposta'].describe())
-    print("-" * 50)
-# %%
-import numpy as np
-import pandas as pd
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from sklearn.decomposition import PCA
-
-# Assumindo que 'df' é o seu DataFrame original e 'df_results' contém os resultados dos métodos de detecção de anomalias
-
-# Preparar os dados para PCA
-scaler = StandardScaler()
-df_scaled = scaler.fit_transform(df)
-
-# Aplicar PCA
-pca = PCA(n_components=2)
-df_pca = pca.fit_transform(df_scaled)
-
-# Criar um DataFrame com os resultados de todos os métodos
-consensus_df = pd.DataFrame({
-    'KMeans': df_results['anomalia_kmeans'],
-    'DBSCAN': df_results['anomalia_dbscan'],
-    'LOF': df_results['anomalia_lof'],
-    'IForest': df_results['anomalia_iforest']
-})
-
-# Calcular o número de detecções por registro
-consensus_df['n_detections'] = consensus_df.sum(axis=1)
-
-# Criar visualização
-plt.figure(figsize=(20, 15))
-
-# Subplot 1: Scatter plot do PCA com consenso
-plt.subplot(2, 2, 1)
-scatter = plt.scatter(df_pca[:, 0], df_pca[:, 1],
-                     c=consensus_df['n_detections'],
-                     cmap='viridis',
-                     alpha=0.6)
-plt.colorbar(scatter, label='Número de métodos que detectaram como anomalia')
-plt.title('Consenso na Detecção de Anomalias (PCA)')
-plt.xlabel('Primeira Componente Principal')
-plt.ylabel('Segunda Componente Principal')
-
-# Subplot 2: Distribuição do número de detecções
-plt.subplot(2, 2, 2)
-consensus_df['n_detections'].hist(bins=5)
-plt.title('Distribuição do Número de Detecções')
-plt.xlabel('Número de Métodos')
-plt.ylabel('Frequência')
-
-# Definir níveis de consenso
-consensus_levels = {
-    'Consenso Total (4)': consensus_df['n_detections'] == 4,
-    'Forte (≥3)': consensus_df['n_detections'] >= 3,
-    'Moderado (≥2)': consensus_df['n_detections'] >= 2,
-    'Fraco (≥1)': consensus_df['n_detections'] >= 1
-}
-
-# Subplot 3: Barplot do número de anomalias por nível de consenso
-plt.subplot(2, 2, 3)
-counts = [sum(mask) for mask in consensus_levels.values()]
-plt.bar(consensus_levels.keys(), counts)
-plt.xticks(rotation=45)
-plt.title('Número de Anomalias por Nível de Consenso')
-plt.ylabel('Número de Registros')
-
-# Subplot 4: Boxplot dos valores da primeira componente principal por nível de consenso
-plt.subplot(2, 2, 4)
-consensus_data = []
-labels = []
-for level_name, mask in consensus_levels.items():
-    consensus_data.append(df_pca[mask, 0])
-    labels.append(level_name)
-
-plt.boxplot(consensus_data, labels=labels)
-plt.xticks(rotation=45)
-plt.title('Distribuição da Primeira Componente Principal por Nível de Consenso')
-plt.ylabel('Valor da Primeira Componente Principal')
-
-plt.tight_layout()
-plt.show()
-
-# Imprimir estatísticas para cada nível de consenso
-for level_name, mask in consensus_levels.items():
-    n_anomalies = sum(mask)
-    print(f"\n {level_name} ({n_anomalies} anomalias):")
-    print("\nEstatísticas da Primeira Componente Principal:")
-    print(pd.Series(df_pca[mask, 0]).describe())
-    print("\nEstatísticas da Segunda Componente Principal:")
-    print(pd.Series(df_pca[mask, 1]).describe())
-    print("-" * 50)
-
+    if n_anomalies > 0:
+        print(data[mask].describe())
 # %%
